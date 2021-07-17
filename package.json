@@ -1,0 +1,23 @@
+{
+    "name": "gitdid",
+    "version": "1.0.0",
+    "description": "A CLI tool to manage complex GitHub workflows.",
+    "main": "bin/index.js",
+    "scripts": {
+        "test": "test"
+    },
+    "keywords": [
+        "GitHub",
+        "CLI",
+        "git",
+        "Node.js"
+    ],
+    "bin": {
+        "gitdid": "./bin/index.js"
+    },
+    "author": "Chris Black",
+    "license": "ISC",
+    "dependencies": {
+        "chalk": "^4.1.1"
+    }
+}
