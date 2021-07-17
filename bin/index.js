@@ -32,7 +32,29 @@ const chalk = require('chalk');
  * * Create PR to preprod using prProps
  * * Store PR id
  * 
+ * If a PR for my_feature_branch DOES exist, then we create a new PR for develop and update PREPROD
+ * *
+ * * UPDATE FLOW
+ * *
+ * * Get the title & description from the response to gh pr view my_feature_branch
+ * * You'll have to use regex
+ * * The description goes from the '--' to the end.
+ * * Store them.
+ * *
+ * * DEVELOP
+ * * Create my_feature_branch-DEVELOP from my_feature_branch
+ * * Create PR to develop using prProps
+ * * Store PR id
+ * *
+ * * Fetch PR ids of preduction and preprod and store them
+ * *
+ * * PREPROD
+ * * Merge my_feature_branch into my_feature_branch-PREPROD
  * 
+ * IN EITHER CASE: 
+ * 
+ * PR TITLE/DESCRIPTION UPDATE
+ * Go to each PR and update the title and description, appending the three PR links at the end. 
  * 
  */
 
@@ -53,8 +75,8 @@ const getInput = (function () {
 
 async function runCommands() {
 	try {
-		const { stdout } = await exec('gh pr status');
-		console.log(`stdout:\n${stdout}`);
+		const { stdout } = await exec('gh pr view my_feature_branch');
+		console.log(stdout.split('--')[1].split('\r\n_Develop_: ')[1]);
 	} catch (e) {
 		console.log(e);
 	}
