@@ -8,7 +8,6 @@ const rl = readline.createInterface({
     output: process.stdout
 });
 const chalk = require('chalk');
-const { access } = require('fs');
 
 /*
 Branch my_feature_branch from production exists and is pushed already
@@ -62,32 +61,40 @@ Branch my_feature_branch from production exists and is pushed already
 const prProps = {
     ticketId: '',
     title: '',
-    body: ''
+    summary: ''
 };
 
-const prLinks = [];
+const prLinks = {
+	production: '',
+	preprod: '',
+	develop: '',
+};
 
 const main = async () => {
     try {
         // Get current branch
         const { stdout } = await exec('git branch --show-current');
         // Trim the newline at the end
-        currentBranch = stdout.replace('\n', '');
+        workingBranch = stdout.replace('\n', '');
 
-        // Get the current branch PR
-        let currentBranchPr = null;
+        // Get the working branch PR
+        let workingBranchPr;
         try {
-            const { stdout } = await exec(`gh pr view ${currentBranch}`);
-            currentBranchPr = sdtout;
+            const { stdout } = await exec(`gh pr view ${workingBranch}`);
+			// If there is an open PR, update workingBranchPr
+            workingBranchPr = stdout.includes('state:\tOPEN') ? stdout : null;
         } catch (e) {
-            console.log(`No pull requests found for ${currentBranch}`);
+			// If there is no PR, gh throws an error, so we must catch it here
+			// so the code will keep running. It's not really an error as far as 
+			// we're concerned.
         }
 
-        if (currentBranchPr) {
-            // We are updating.
-            // Get the PR title and description without the "Develop" link at the end.
-            // This will take some regex!
-            //
+        if (workingBranchPr) {
+			console.log(workingBranchPr.split('\n'));
+			// We are updating.
+			// Get the PR title and description without the "Develop" link at the end.
+			// This will take some regex!
+			//
         } else {
             await createFeatureBranchesAndOpenPrs();
         }
@@ -100,26 +107,24 @@ main().then(() => process.exit(0));
 
 async function createFeatureBranchesAndOpenPrs() {
     try {
-        // console.log('Jira Ticket ID:');
-        // prProps.ticketId = await getInput();
-        // console.log('PR Title:');
-        // prProps.title = await getInput();
-        // console.log('PR Description:');
-        // prProps.body = await getInput();
-        // console.log(prProps);
+        console.log('Jira Ticket ID:');
+        prProps.ticketId = await getInput();
+        console.log('PR Title:');
+        prProps.title = await getInput();
+        console.log('PR Summary:');
+        prProps.summary = await getInput();
 
-        await createFeatureBranch(currentBranch, 'DEVELOP');
-        // await createFeatureBranch(currentBranch, 'PREPROD');
+        await createFeatureBranch(workingBranch, 'develop');
+        await createFeatureBranch(workingBranch, 'preprod');
 
-        // Open a PR for that branch into branch
-        // ALL BRANCHES
-        // exec:
-        // gh pr create --base ${branch} --title "${prProps.ticketId}: ${prProps.title} (${branch})" --body "${prProps.body}"
-        // If this returns the PR number or a link, store it in prLinks
-        // End for loop
-        // Here we must update the body the PRs on each branch with the PR links
-        // Build the string out of PR links.
-        // Use gh to update each PR title.
+		await createPr(workingBranch, 'production');
+		await createPr(workingBranch, 'preprod');
+		await createPr(workingBranch, 'develop');
+
+        // Update the body the PRs on each branch
+        await updatePrBodies();
+
+		console.log('🐙 All did!')
     } catch (e) {
         console.log(e);
     }
@@ -134,18 +139,68 @@ const getInput = (function () {
     return async () => (await getLineGen.next()).value;
 })();
 
-async function createFeatureBranch(currentBranch, branch) {
+async function createFeatureBranch(workingBranch, branch) {
+	// CHRIS LOOK does this need to be wrapped in a promise?
 	return new Promise(async resolve => {
 		// Create a new feature branch and push to origin
-		console.log(chalk.blue(`Creating ${currentBranch}-${branch}`));
+		console.log(chalk.blue(`Creating ${workingBranch}-${branch}`));
 		await exec(`git checkout ${branch}`);
 		await exec(`git pull origin ${branch}`);
 		await exec(
-			`git checkout -b ${currentBranch}-${branch} ${currentBranch}`
+			`git checkout -b ${workingBranch}-${branch} ${workingBranch}`
 		);
 		await exec(`git merge --no-ff ${branch}`);
-		await exec(`git push origin ${currentBranch}-${branch}`);
-		console.log(chalk.green(`${currentBranch}-${branch} created.`));
+		await exec(`git push origin ${workingBranch}-${branch}`);
+		await exec(`git checkout ${workingBranch}`);
+		console.log(chalk.green(`${workingBranch}-${branch} created.`));
 		resolve();
 	});	
+}
+
+async function createPr(workingBranch, branch) {
+	console.log(chalk.blue(`Opening new PR for ${workingBranch}-${branch} to ${branch}`));
+
+	if (branch !== 'production') {
+		// Checkout feature branch
+		await exec(`git checkout ${workingBranch}-${branch}`);
+	}
+
+	// Create PR
+	const { stdout: prLink } = await exec(`gh pr create --base ${branch} --title "${prProps.ticketId}: ${prProps.title} (${branch})" --body "${prProps.summary}"`);
+
+	// Store PR link
+	prLinks[branch] = prLink.replace('\n', '');
+
+	console.log(chalk.green(`New PR for ${workingBranch}-${branch} created.`));
+
+	if (branch !== 'production') {
+		// Return to working branch
+		await exec(`git checkout ${workingBranch}`);
+	}
+}
+
+async function updatePrBodies() {
+	console.log(chalk.blue(`Updating PR descriptions.`));
+
+	// Update PRs with new descriptions
+	await exec(`gh pr edit ${prLinks.production} --body "${buildPrBody()}"`);
+	await exec(`gh pr edit ${prLinks.preprod} --body "${buildPrBody()}"`);
+	await exec(`gh pr edit ${prLinks.develop} --body "${buildPrBody()}"`);
+
+	console.log(chalk.green(`PRs updated.`));
+}
+
+function buildPrBody() {
+	return `
+	## Summary
+	${prProps.summary}
+
+	## Ticket(s)
+	- https://alleyinteractive.atlassian.net/browse/${prProps.ticketId}
+
+	### Related Pull Requests:
+	_Production_: ${prLinks.production}
+	_Preprod_: ${prLinks.preprod}
+	_Develop_: ${prLinks.develop}
+	`
 }
