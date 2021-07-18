@@ -9,55 +9,6 @@ const rl = readline.createInterface({
 });
 const chalk = require('chalk');
 
-/*
-Branch my_feature_branch from production exists and is pushed already
- 
- If a PR for my_feature_branch does NOT exist, then this is the first time running gitdid
- 
-	CREATE flow
-	
-	Prompt for prProps
-	
-	PRODUCTION
-	Create PR to production using prProps
-	Store PR id
-	
-	DEVELOP
-	Create my_feature_branch-DEVELOP from my_feature_branch
-	Create PR to develop using prProps
-	Store PR id
-	
-	PREPROD
-	Create my_feature_branch-PREPROD from my_feature_branch
-	Create PR to preprod using prProps
-	Store PR id
- 
- If a PR for my_feature_branch DOES exist, then we create a new PR for develop and update PREPROD
- 
-	UPDATE FLOW
-	
-	Get the title & description from the response to gh pr view my_feature_branch
-	You'll have to use regex
-	The description goes from the '--' to the end.
-	Store them.
-	
-	DEVELOP
-	Create my_feature_branch-DEVELOP from my_feature_branch
-	Create PR to develop using prProps
-	Store PR id
-	
-	Fetch PR ids of preduction and preprod and store them
-	
-	PREPROD
-	Merge my_feature_branch into my_feature_branch-PREPROD
- 
- IN EITHER CASE: 
- 
- PR TITLE/DESCRIPTION UPDATE
- Go to each PR and update the title and description, appending the three PR links at the end. 
- 
- */
-
 const prProps = {
     ticketIdSet: [],
     title: '',
@@ -90,11 +41,7 @@ const main = async () => {
         }
 
         if (workingBranchPr) {
-			console.log(workingBranchPr.split('\n'));
-			// We are updating.
-			// Get the PR title and description without the "Develop" link at the end.
-			// This will take some regex!
-			//
+			await updatePrs(workingBranch);
         } else {
             await createFeatureBranchesAndOpenPrs();
         }
@@ -104,6 +51,35 @@ const main = async () => {
 };
 
 main().then(() => process.exit(0));
+
+async function updatePrs(workingBranchPr) {
+	// Merge workingBranch into feature_branch-preprod and push it
+
+	// Check to see if the feature_branch-develop still has an open PR on it
+
+	// If so,
+		// Merge workingBranch into feature_branch-develop and push it
+
+	// If not, 
+		// Delete the local -develop branch, if it exists
+		// await createFeatureBranch(workingBranch, 'develop');
+
+		// Get the production PR ticketId, title, and description from workingBranchPr.
+		// This will take some regex.
+		// Store those values on prProps 
+		// Now we have prProps populated
+		console.log(workingBranchPr.split('\n')); // Just to look at it.
+
+		// await createPr(workingBranch, 'develop');
+		// Now we have new develop PR link on prLinks
+
+		// Update all three PRs with new develop PR link by 
+		// const [summary] = prProps.summary.split('_Develop_: ');
+		// const newSummary = summary + '_Develop_: ' + prLinks.develop;
+		// await exec(`gh pr edit ${prLinks.production} --body "${newSummary}"`);
+		// await exec(`gh pr edit ${prLinks.preprod} --body "${newSummary}"`);
+		// await exec(`gh pr edit ${prLinks.develop} --body "${newSummary}"`);
+}
 
 async function createFeatureBranchesAndOpenPrs() {
     try {
