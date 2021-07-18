@@ -59,7 +59,7 @@ Branch my_feature_branch from production exists and is pushed already
  */
 
 const prProps = {
-    ticketId: '',
+    ticketIdSet: [],
     title: '',
     summary: ''
 };
@@ -107,12 +107,7 @@ main().then(() => process.exit(0));
 
 async function createFeatureBranchesAndOpenPrs() {
     try {
-        console.log('Jira Ticket ID:');
-        prProps.ticketId = await getInput();
-        console.log('PR Title:');
-        prProps.title = await getInput();
-        console.log('PR Summary:');
-        prProps.summary = await getInput();
+        await getPrProps();
 
         await createFeatureBranch(workingBranch, 'develop');
         await createFeatureBranch(workingBranch, 'preprod');
@@ -130,6 +125,15 @@ async function createFeatureBranchesAndOpenPrs() {
     }
 }
 
+async function getPrProps() {
+	console.log('Jira Ticket ID(s), separated by commas:');
+	prProps.ticketIdSet = (await getInput()).split(',').filter(ticketId => ticketId.trim() !== '');
+	console.log('PR Title:');
+	prProps.title = await getInput();
+	console.log('PR Summary:');
+	prProps.summary = await getInput();
+}
+
 const getInput = (function () {
     const getLineGen = (async function* () {
         for await (const line of rl) {
@@ -140,21 +144,17 @@ const getInput = (function () {
 })();
 
 async function createFeatureBranch(workingBranch, branch) {
-	// CHRIS LOOK does this need to be wrapped in a promise?
-	return new Promise(async resolve => {
-		// Create a new feature branch and push to origin
-		console.log(chalk.blue(`Creating ${workingBranch}-${branch}`));
-		await exec(`git checkout ${branch}`);
-		await exec(`git pull origin ${branch}`);
-		await exec(
-			`git checkout -b ${workingBranch}-${branch} ${workingBranch}`
-		);
-		await exec(`git merge --no-ff ${branch}`);
-		await exec(`git push origin ${workingBranch}-${branch}`);
-		await exec(`git checkout ${workingBranch}`);
-		console.log(chalk.green(`${workingBranch}-${branch} created.`));
-		resolve();
-	});	
+	// Create a new feature branch and push to origin
+	console.log(chalk.blue(`Creating ${workingBranch}-${branch}`));
+	await exec(`git checkout ${branch}`);
+	await exec(`git pull origin ${branch}`);
+	await exec(
+		`git checkout -b ${workingBranch}-${branch} ${workingBranch}`
+	);
+	await exec(`git merge --no-ff ${branch}`);
+	await exec(`git push origin ${workingBranch}-${branch}`);
+	await exec(`git checkout ${workingBranch}`);
+	console.log(chalk.green(`${workingBranch}-${branch} created.`));
 }
 
 async function createPr(workingBranch, branch) {
@@ -166,7 +166,7 @@ async function createPr(workingBranch, branch) {
 	}
 
 	// Create PR
-	const { stdout: prLink } = await exec(`gh pr create --base ${branch} --title "${prProps.ticketId}: ${prProps.title} (${branch})" --body "${prProps.summary}"`);
+	const { stdout: prLink } = await exec(`gh pr create --base ${branch} --title "${prProps.ticketIdSet}: ${prProps.title} (${branch})" --body "${prProps.summary}"`);
 
 	// Store PR link
 	prLinks[branch] = prLink.replace('\n', '');
@@ -191,16 +191,6 @@ async function updatePrBodies() {
 }
 
 function buildPrBody() {
-	return `
-	## Summary
-	${prProps.summary}
-
-	## Ticket(s)
-	- https://alleyinteractive.atlassian.net/browse/${prProps.ticketId}
-
-	### Related Pull Requests:
-	_Production_: ${prLinks.production}
-	_Preprod_: ${prLinks.preprod}
-	_Develop_: ${prLinks.develop}
-	`
+	const jiraTicketList = prProps.ticketIdSet.map(ticketId => `\n- https://alleyinteractive.atlassian.net/browse/${ticketId}`);
+	return `## Summary\n${prProps.summary}\r\n## Ticket(s)${jiraTicketList}\r\n## Related Pull Requests:\n_Production_: ${prLinks.production}\n_Preprod_: ${prLinks.preprod}\n_Develop_: ${prLinks.develop}`;
 }
