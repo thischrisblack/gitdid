@@ -29,16 +29,18 @@ const main = async () => {
         workingBranch = stdout.replace('\n', '');
 
 		if (workingBranch.endsWith('-develop') || workingBranch.endsWith('-preprod')) {
-			throw new Error('You are on the wrong branch. Please check out the feature branch you cut from production, not your -develop or -preprod feature branch.')
+			throw new Error('You are on the wrong branch. Please check out the feature branch you cut from production, not your -develop or -preprod feature branch.');
 		}
+
+		console.log(chalk.green('✔️ Okay.'))
 
         // Get the working branch PR
         const workingBranchPr = await getOpenPr(workingBranch);
 
         if (workingBranchPr) {
-            await updatePrs(workingBranch, workingBranchPr);
+            // await updatePrs(workingBranch, workingBranchPr);
         } else {
-            await createFeatureBranchesAndOpenPrs(workingBranch);
+            // await createFeatureBranchesAndOpenPrs(workingBranch);
         }
 		return true;
     } catch (e) {
@@ -111,7 +113,7 @@ async function updateAndPushBranch(workingBranch, branch) {
     await exec(`git merge --no-ff ${workingBranch}`);
     await exec(`git push origin ${workingBranch}-${branch}`);
     await exec(`git checkout ${workingBranch}`);
-    console.log(chalk.green(`${workingBranch}-${branch} updated.`));
+    console.log(chalk.green(`✔️ ${workingBranch}-${branch} updated.\r\n`));
 }
 
 async function appendNewDevelopPrToSummaries(workingBranch) {
@@ -140,7 +142,7 @@ async function appendNewDevelopPrToSummaries(workingBranch) {
 	})
 	await Promise.all(promiseSet);
 
-	console.log(chalk.green(`All ${workingBranch} PR summaries updated.`));
+	console.log(chalk.green(`✔️ All ${workingBranch} PR summaries updated.\r\n`));
 }
 
 function updatePrProps(prString) {
@@ -201,12 +203,12 @@ async function createFeatureBranch(workingBranch, branch) {
     await exec(`git merge --no-ff ${branch}`);
     await exec(`git push origin ${workingBranch}-${branch}`);
     await exec(`git checkout ${workingBranch}`);
-    console.log(chalk.green(`${workingBranch}-${branch} created.`));
+    console.log(chalk.green(`✔️ ${workingBranch}-${branch} created.\r\n`));
 }
 
 async function createPr(workingBranch, branch) {
     console.log(
-        chalk.blue(`Opening new PR for ${workingBranch}-${branch} to ${branch}`)
+        chalk.blue(`Opening new PR for ${workingBranch}${branch !== 'production' ? `-${branch}` : ''} to ${branch}`)
     );
 
     if (branch !== 'production') {
@@ -222,7 +224,7 @@ async function createPr(workingBranch, branch) {
     // Store PR link
     prLinks[branch] = prLink.replace('\n', '');
 
-    console.log(chalk.green(`New PR for ${workingBranch}-${branch} created.`));
+    console.log(chalk.green(`✔️ New PR for ${workingBranch}-${branch} created.\r\n`));
 
     if (branch !== 'production') {
         // Return to working branch
@@ -238,7 +240,7 @@ async function updatePrBodies() {
     await exec(`gh pr edit ${prLinks.preprod} --body "${buildPrBody()}"`);
     await exec(`gh pr edit ${prLinks.develop} --body "${buildPrBody()}"`);
 
-    console.log(chalk.green(`PRs updated.`));
+    console.log(chalk.green(`✔️ PRs updated.\r\n`));
 }
 
 function buildPrBody() {
