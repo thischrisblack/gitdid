@@ -32,15 +32,13 @@ const main = async () => {
 			throw new Error('You are on the wrong branch. Please check out the feature branch you cut from production, not your -develop or -preprod feature branch.');
 		}
 
-		console.log(chalk.green('✔️ Okay.'))
-
         // Get the working branch PR
         const workingBranchPr = await getOpenPr(workingBranch);
 
         if (workingBranchPr) {
-            // await updatePrs(workingBranch, workingBranchPr);
+            await updatePrs(workingBranch, workingBranchPr);
         } else {
-            // await createFeatureBranchesAndOpenPrs(workingBranch);
+            await createFeatureBranchesAndOpenPrs(workingBranch);
         }
 		return true;
     } catch (e) {
