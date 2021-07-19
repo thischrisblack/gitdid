@@ -28,6 +28,10 @@ const main = async () => {
         // Trim the newline at the end
         workingBranch = stdout.replace('\n', '');
 
+		if (workingBranch.endsWith('-develop') || workingBranch.endsWith('-preprod')) {
+			throw new Error('You are on the wrong branch. Please check out the feature branch you cut from production, not your -develop or -preprod feature branch.')
+		}
+
         // Get the working branch PR
         const workingBranchPr = await getOpenPr(workingBranch);
 
@@ -36,13 +40,17 @@ const main = async () => {
         } else {
             await createFeatureBranchesAndOpenPrs(workingBranch);
         }
+		return true;
     } catch (e) {
         console.log(chalk.red(e));
+		return false;
     }
 };
 
-main().then(() => {
-	console.log('🐙 All did!');
+main().then((success) => {
+	if (success) {
+		console.log('🐙 All did!');
+	}
 	process.exit(0);
 });
 
@@ -92,12 +100,8 @@ async function updatePrs(workingBranch, workingBranchPr) {
         // Create new PR to develop
         await createPr(workingBranch, 'develop');
 
-        // Update all three PRs with new develop PR link.
-        const newSummary = prProps.summary + '_Develop_: ' + prLinks.develop;
-		// CHRIS LOOK we don't actually have prLinks here probably.
-        await exec(`gh pr edit ${prLinks.production} --body "${newSummary}"`);
-        await exec(`gh pr edit ${prLinks.preprod} --body "${newSummary}"`);
-        await exec(`gh pr edit ${prLinks.develop} --body "${newSummary}"`);
+		// Append new develop PR link to open PR summaries.
+        await appendNewDevelopPrToSummaries(workingBranch);
     }
 }
 
@@ -108,6 +112,35 @@ async function updateAndPushBranch(workingBranch, branch) {
     await exec(`git push origin ${workingBranch}-${branch}`);
     await exec(`git checkout ${workingBranch}`);
     console.log(chalk.green(`${workingBranch}-${branch} updated.`));
+}
+
+async function appendNewDevelopPrToSummaries(workingBranch) {
+	console.log(chalk.blue(`Updating all ${workingBranch} PR summaries.`));
+
+	// Append develop PR link to the end of the summary.
+	const newSummary = prProps.summary + '_Develop_: ' + prLinks.develop;
+
+	// Get array of open PR numbers
+	const { stdout: prList } = await exec(`gh pr list -s open`);
+
+	// Filter list by current workingBranch name, split to get the number
+	const prNumberSet = prList
+		// One PR per line
+		.split('\n')
+		// Filter by the workingBranch name
+		.filter(prLine => prLine.includes(workingBranch))
+		// Split to the PR number, which comes first on the line
+		.map(workingBranchPrLine => workingBranchPrLine.split('\t')[0])
+		// Remove any empty values
+		.filter(prNumber => prNumber !== '');
+
+	// Update all PRs
+	const promiseSet = prNumberSet.map(prNumber => {
+		exec(`gh pr edit ${prNumber} --body "${newSummary}"`)
+	})
+	await Promise.all(promiseSet);
+
+	console.log(chalk.green(`All ${workingBranch} PR summaries updated.`));
 }
 
 function updatePrProps(prString) {
