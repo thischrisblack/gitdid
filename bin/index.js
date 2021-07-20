@@ -54,6 +54,22 @@ main().then((success) => {
 	process.exit(0);
 });
 
+// CHRIS LOOK
+async function checkForMergeConflicts(workingBranch, branch) {
+    // git checkout branch
+    // git pull origin branch
+    // git checkout -b merge-check workingBranch
+    // try
+    //      git merge --no-ff branch
+    //      git checkout workingBranch
+    //      git branch -D merge-check
+    // catch
+    //      log error
+    //      git checkout workingBranch
+    //      git branch -D merge-check
+    //      quit
+}
+
 async function getOpenPr(branch) {
     // Get the working branch PR
     let existingPr = null;
