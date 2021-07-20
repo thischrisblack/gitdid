@@ -21,7 +21,7 @@ Create a feature branch from `production` (e.g. `my_feature_branch`) and do your
 
 This will create new feature branches for your `develop` and `preprod` branches (e.g. `my_feature_branch-develop` etc.), and open new pull requests for all three branches.
 
-If you make changes to `my_feature_branch`, you can propagate these changes to the other branches and update the PRs simply by running `gitdid` again.
+If you make changes to `my_feature_branch`, you can propagate these changes to the other branches and update the PRs simply by running `gitdid` again (after you've commited and pushed your changes, of course).
 
 ### To Do
 
