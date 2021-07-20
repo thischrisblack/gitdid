@@ -21,23 +21,34 @@ const prLinks = {
     develop: ''
 };
 
-const main = async () => {
+/**
+ * Determines current branch, checks for potential merge conflicts, determines subsequent workflow
+ * @returns bool Success or failure
+ */
+async function main() {
     try {
         // Get current branch
         const { stdout } = await exec('git branch --show-current');
         // Trim the newline at the end
         workingBranch = stdout.replace('\n', '');
 
-		if (workingBranch.endsWith('-develop') || workingBranch.endsWith('-preprod')) {
+        // Rough check to be sure we're on the correct branch.
+		if (workingBranch.endsWith('-develop') || workingBranch.endsWith('-preprod') || workingBranch === 'production') {
 			throw new Error('You are on the wrong branch. Please check out the feature branch you cut from production, not your -develop or -preprod feature branch.');
 		}
+
+        // Check for merge conflicts
+        await checkForMergeConflicts(workingBranch, 'develop');
+        await checkForMergeConflicts(workingBranch, 'preprod');
 
         // Get the working branch PR
         const workingBranchPr = await getOpenPr(workingBranch);
 
         if (workingBranchPr) {
+            // If a PR exists, we are updating existing PRs
             await updatePrs(workingBranch, workingBranchPr);
         } else {
+            // Otherwise, we are starting from scratch
             await createFeatureBranchesAndOpenPrs(workingBranch);
         }
 		return true;
@@ -47,6 +58,7 @@ const main = async () => {
     }
 };
 
+// Start the process.
 main().then((success) => {
 	if (success) {
 		console.log('🐙 All did!');
@@ -54,24 +66,35 @@ main().then((success) => {
 	process.exit(0);
 });
 
-// CHRIS LOOK
+/**
+ * Attempts a test merge to a given branch to find out if there will be conflicts
+ * @param {string} workingBranch The name of the current branch
+ * @param {string} branch The name of the target branch
+ */
 async function checkForMergeConflicts(workingBranch, branch) {
-    // git checkout branch
-    // git pull origin branch
-    // git checkout -b merge-check workingBranch
-    // try
-    //      git merge --no-ff branch
-    //      git checkout workingBranch
-    //      git branch -D merge-check
-    // catch
-    //      log error
-    //      git checkout workingBranch
-    //      git branch -D merge-check
-    //      quit
+    await exec(`git checkout ${branch}`);
+    await exec(`git pull origin ${branch}`);
+    await exec(`git checkout -b temp_merge_check_branch ${workingBranch}`);
+    try {
+        await exec(`git merge --no-ff ${branch}`)
+        await exec(`git checkout ${workingBranch}`)
+        await exec(`git branch -D temp_merge_check_branch`)
+    } catch {
+        console.log(chalk.red(`😧 There is a merge conflict in ${branch}. Nothing was did. You will have to proceed manually. Sorry 😢`));
+        await exec(`git merge --abort`);
+        await exec(`git checkout ${workingBranch}`);
+        await exec(`git branch -D temp_merge_check_branch`);
+        process.exit(0);
+    }
 }
 
+/**
+ * Find open PR for a given branch
+ * https://cli.github.com/manual/gh_pr_view
+ * @param {string} branch The branch to check for an existing open PR
+ * @returns null if no PR exists, string with PR info otherwise
+ */
 async function getOpenPr(branch) {
-    // Get the working branch PR
     let existingPr = null;
     try {
         const { stdout } = await exec(`gh pr view ${branch}`);
@@ -84,8 +107,15 @@ async function getOpenPr(branch) {
     return existingPr;
 }
 
+/**
+ * Merge new work into preprod and develop working branches and update open PRs
+ * @param {string} workingBranch The branch with the new work in it
+ * @param {string} workingBranchPr Information about the working branch existing open PR
+ */
 async function updatePrs(workingBranch, workingBranchPr) {
     // Merge workingBranch into working_branch-preprod and push it.
+    // TODO: Duplicate the logic for develop below for preprod as well in case
+    // changes are requested during QA or UAT
     await updateAndPushBranch(workingBranch, 'preprod');
 
     // Check to see if the working_branch-develop still has an open PR on it.
@@ -96,21 +126,18 @@ async function updatePrs(workingBranch, workingBranchPr) {
         // Merge workingBranch into working_branch-develop and push it.
         await updateAndPushBranch(workingBranch, 'develop');
     } else {
-        // If not, delete the local -develop branch, if it exists.
+        // If not, delete the local working_branch-develop branch, if it exists.
         try {
             await exec(`git branch -D ${workingBranch}-develop`);
         } catch (e) {
-            console.log(
-                chalk.blue(
-                    `Excellent, ${workingBranch}-develop was already deleted.`
-                )
-            );
+            // An error means there was no local working_branch-develop branch,
+            // which is fine, so we catch the error and proceed.
         }
 
-        // Create new -develop feature branch.
+        // Create new working_branch-develop feature branch.
         await createFeatureBranch(workingBranch, 'develop');
 
-        // Set props in prProps from the workingBranch PR.
+        // Set props in prProps with info from from the workingBranch PR.
         updatePrProps(workingBranchPr);
 
         // Create new PR to develop
@@ -121,6 +148,11 @@ async function updatePrs(workingBranch, workingBranchPr) {
     }
 }
 
+/**
+ * Checks out existing feature branches and merges new changes into them.
+ * @param {string} workingBranch The name of the branch with all the work in it.
+ * @param {string} branch The target branch.
+ */
 async function updateAndPushBranch(workingBranch, branch) {
     console.log(chalk.blue(`Updating ${workingBranch}-${branch}`));
     await exec(`git checkout ${workingBranch}-${branch}`);
@@ -130,13 +162,17 @@ async function updateAndPushBranch(workingBranch, branch) {
     console.log(chalk.green(`✔️ ${workingBranch}-${branch} updated.\r\n`));
 }
 
+/**
+ * Updates existing PR descriptions with new develop PR link
+ * @param {string} workingBranch The name of the working branch.
+ */
 async function appendNewDevelopPrToSummaries(workingBranch) {
 	console.log(chalk.blue(`Updating all ${workingBranch} PR summaries.`));
 
 	// Append develop PR link to the end of the summary.
 	const newSummary = prProps.summary + '_Develop_: ' + prLinks.develop;
 
-	// Get array of open PR numbers
+	// Get array of open PR numbers.
 	const { stdout: prList } = await exec(`gh pr list -s open`);
 
 	// Filter list by current workingBranch name, split to get the number
@@ -159,6 +195,11 @@ async function appendNewDevelopPrToSummaries(workingBranch) {
 	console.log(chalk.green(`✔️ All ${workingBranch} PR summaries updated.\r\n`));
 }
 
+/**
+ * Populates prProps object with data from an existing PR obtained with 'gh pr view'
+ * https://cli.github.com/manual/gh_pr_view
+ * @param {string} prString PR data (title, number, status, etc.)
+ */
 function updatePrProps(prString) {
     // Parse the ticket ID and title
     const titleRegex = /title:\t(.*?)\s\(production\)/m;
@@ -170,9 +211,13 @@ function updatePrProps(prString) {
     prProps.summary = prString.split('--\n')[1].split('_Develop_')[0];
 }
 
+/**
+ * Handles the feature branch and PR creation when gitdid is run for the first time
+ * @param {string} workingBranch The name of the branch with new work in it
+ */
 async function createFeatureBranchesAndOpenPrs(workingBranch) {
     try {
-        await getPrProps();
+        await getPrProps(workingBranch);
 
         await createFeatureBranch(workingBranch, 'develop');
         await createFeatureBranch(workingBranch, 'preprod');
@@ -188,18 +233,27 @@ async function createFeatureBranchesAndOpenPrs(workingBranch) {
     }
 }
 
+/**
+ * Prompts user for information to be used in the PR.
+ */
 async function getPrProps() {
     console.log('Jira Ticket ID(s), separated by commas:');
     prProps.ticketIdSet = (await getInput())
         .split(',')
         .filter((ticketId) => ticketId.trim() !== '');
+
     console.log('PR Title:');
     prProps.title = await getInput();
+
     console.log('PR Summary:');
     prProps.summary = await getInput();
 }
 
-const getInput = (function () {
+/**
+ * Prompts user for input
+ * Taken from https://stackoverflow.com/questions/43638105/how-to-get-synchronous-readline-or-simulate-it-using-async-in-nodejs
+ */
+const getInput = (() => {
     const getLineGen = (async function* () {
         for await (const line of rl) {
             yield line;
@@ -208,6 +262,11 @@ const getInput = (function () {
     return async () => (await getLineGen.next()).value;
 })();
 
+/**
+ * Creates new feature brnaches for develop and preprod, with -develop and -preprod suffixes
+ * @param {string} workingBranch The name of the working branch
+ * @param {string} branch The name of the target branch
+ */
 async function createFeatureBranch(workingBranch, branch) {
     // Create a new feature branch and push to origin
     console.log(chalk.blue(`Creating ${workingBranch}-${branch}`));
@@ -220,6 +279,12 @@ async function createFeatureBranch(workingBranch, branch) {
     console.log(chalk.green(`✔️ ${workingBranch}-${branch} created.\r\n`));
 }
 
+/**
+ * Opens a new PR.
+ * https://cli.github.com/manual/gh_pr
+ * @param {string} workingBranch The name of the working branch
+ * @param {string} branch The name of the target branch
+ */
 async function createPr(workingBranch, branch) {
     console.log(
         chalk.blue(`Opening new PR for ${workingBranch}${branch !== 'production' ? `-${branch}` : ''} to ${branch}`)
@@ -246,6 +311,9 @@ async function createPr(workingBranch, branch) {
     }
 }
 
+/**
+ * Updates each PR with ammended descriptions.
+ */
 async function updatePrBodies() {
     console.log(chalk.blue(`Updating PR descriptions.`));
 
@@ -257,6 +325,10 @@ async function updatePrBodies() {
     console.log(chalk.green(`✔️ PRs updated.\r\n`));
 }
 
+/**
+ * Creates a string for the PR description.
+ * @returns string The full PR description.
+ */
 function buildPrBody() {
     const jiraTicketList = prProps.ticketIdSet.map(
         (ticketId) =>
