@@ -10,6 +10,7 @@ This is very much a work-in-progress, so excuse the mess in all its imperative a
 - From the root of this repo, run:
 
 `npm install`
+
 `npm install -g .`
 
 You will also need the [GitHub CLI](https://cli.github.com/) if you don't have it already. Find installation instructions [here](https://github.com/cli/cli#installation). If it prompts you to choose https or SSH, I used https and it worked fine. Don't forget to authorize it! Instructions [here](https://cli.github.com/manual/gh_auth_login). I used the browser to authenticate.
