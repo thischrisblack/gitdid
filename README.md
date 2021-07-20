@@ -9,6 +9,7 @@ This is very much a work-in-progress, so excuse the mess in all its imperative a
 - Fork this repo to your development machine.
 - From the root of this repo, run:
 
+`npm install`
 `npm install -g .`
 
 You will also need the [GitHub CLI](https://cli.github.com/) if you don't have it already. Find installation instructions [here](https://github.com/cli/cli#installation). If it prompts you to choose https or SSH, I used https and it worked fine.
