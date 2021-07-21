@@ -87,7 +87,7 @@ async function checkForMergeConflicts(workingBranch, branch) {
         await exec(`git branch -D temp_merge_check_branch`);
         process.exit(0);
     }
-    console.log(chalk.green(`✔️ No conflict detected on ${branch}`));
+    console.log(chalk.green(`✔️ No conflict detected on ${branch}\r\n`));
 }
 
 /**
