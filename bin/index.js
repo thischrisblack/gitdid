@@ -72,13 +72,14 @@ main().then((success) => {
  * @param {string} branch The name of the target branch
  */
 async function checkForMergeConflicts(workingBranch, branch) {
+    console.log(chalk.blue(`Checking for possible merge conflicts on ${branch}`));
     await exec(`git checkout ${branch}`);
     await exec(`git pull origin ${branch}`);
     await exec(`git checkout -b temp_merge_check_branch ${workingBranch}`);
     try {
-        await exec(`git merge --no-ff ${branch}`)
-        await exec(`git checkout ${workingBranch}`)
-        await exec(`git branch -D temp_merge_check_branch`)
+        await exec(`git merge --no-ff ${branch}`);
+        await exec(`git checkout ${workingBranch}`);
+        await exec(`git branch -D temp_merge_check_branch`);
     } catch {
         console.log(chalk.red(`😧 There is a merge conflict in ${branch}. Nothing was did. You will have to proceed manually. Sorry 😢`));
         await exec(`git merge --abort`);
@@ -86,6 +87,7 @@ async function checkForMergeConflicts(workingBranch, branch) {
         await exec(`git branch -D temp_merge_check_branch`);
         process.exit(0);
     }
+    console.log(chalk.green(`✔️ No conflict detected on ${branch}`));
 }
 
 /**
