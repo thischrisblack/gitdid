@@ -180,7 +180,7 @@ async function appendNewPrLinksToSummaries(workingBranch) {
     const relatedPrString = '## Related Pull Requests:\n' +
         '_Production_: ' + prLinks.production + '\n' +
         '_Preprod_: ' + prLinks.preprod + '\n' +
-        '_Devcelop_: ' + prLinks.develop;
+        '_Develop_: ' + prLinks.develop;
 
 	// Append PR links to the end of the summary.
 	const newSummary = prProps.summary + relatedPrString;
