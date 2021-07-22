@@ -46,7 +46,18 @@ async function main() {
 
         if (workingBranchPr) {
             // If a PR exists, we are updating existing PRs
-            await updatePrs(workingBranch, workingBranchPr);
+
+            // Set props in prProps with info from from the workingBranch PR.
+            updatePrProps(workingBranchPr);
+
+            // Update PRs
+            const developPrCreated = await updateOrCreatePr(workingBranch, 'develop');
+            const preprodPrCreated = await updateOrCreatePr(workingBranch, 'preprod');
+
+            if (developPrCreated || preprodPrCreated) {
+                // Append new PR links to open PR summaries.
+                await appendNewPrLinksToSummaries(workingBranch);
+            }
         } else {
             // Otherwise, we are starting from scratch
             await createFeatureBranchesAndOpenPrs(workingBranch);
@@ -110,44 +121,38 @@ async function getOpenPr(branch) {
 }
 
 /**
- * Merge new work into preprod and develop working branches and update open PRs
+ * Merge new work into feature branches, create new PRs if necessary
  * @param {string} workingBranch The branch with the new work in it
- * @param {string} workingBranchPr Information about the working branch existing open PR
+ * @param {string} branch The target branch (i.e. preprod or develop)
  */
-async function updatePrs(workingBranch, workingBranchPr) {
-    // Merge workingBranch into working_branch-preprod and push it.
-    // TODO: Duplicate the logic for develop below for preprod as well in case
-    // changes are requested during QA or UAT
-    await updateAndPushBranch(workingBranch, 'preprod');
+async function updateOrCreatePr(workingBranch, branch) {
+    let newPrCreated = false;
+    // Check to see if the working_branch-{branch} still has an open PR on it.
+    const thereIsAnOpenPr =
+        (await getOpenPr(`${workingBranch}-${branch}`)) != null;
 
-    // Check to see if the working_branch-develop still has an open PR on it.
-    const thereIsAnOpenPrToDevelop =
-        (await getOpenPr(`${workingBranch}-develop`)) != null;
-
-    if (thereIsAnOpenPrToDevelop) {
-        // Merge workingBranch into working_branch-develop and push it.
-        await updateAndPushBranch(workingBranch, 'develop');
+    if (thereIsAnOpenPr) {
+        // Merge workingBranch into working_branch-{branch} and push it.
+        await updateAndPushBranch(workingBranch, branch);
     } else {
-        // If not, delete the local working_branch-develop branch, if it exists.
+        // If not, delete the local working_branch-{branch} branch, if it exists.
         try {
-            await exec(`git branch -D ${workingBranch}-develop`);
+            await exec(`git branch -D ${workingBranch}-${branch}`);
         } catch (e) {
-            // An error means there was no local working_branch-develop branch,
+            // An error means there was no local working_branch-{branch} branch,
             // which is fine, so we catch the error and proceed.
         }
 
-        // Create new working_branch-develop feature branch.
-        await createFeatureBranch(workingBranch, 'develop');
+        // Create new working_branch-{branch} feature branch.
+        await createFeatureBranch(workingBranch, branch);
 
-        // Set props in prProps with info from from the workingBranch PR.
-        updatePrProps(workingBranchPr);
+        // Create new PR to branch
+        await createPr(workingBranch, branch);
 
-        // Create new PR to develop
-        await createPr(workingBranch, 'develop');
-
-		// Append new develop PR link to open PR summaries.
-        await appendNewDevelopPrToSummaries(workingBranch);
+        newPrCreated = true;
     }
+
+    return newPrCreated;
 }
 
 /**
@@ -168,11 +173,17 @@ async function updateAndPushBranch(workingBranch, branch) {
  * Updates existing PR descriptions with new develop PR link
  * @param {string} workingBranch The name of the working branch.
  */
-async function appendNewDevelopPrToSummaries(workingBranch) {
+async function appendNewPrLinksToSummaries(workingBranch) {
 	console.log(chalk.blue(`Updating all ${workingBranch} PR summaries.`));
 
-	// Append develop PR link to the end of the summary.
-	const newSummary = prProps.summary + '_Develop_: ' + prLinks.develop;
+    // Create Related Pull Requests string
+    const relatedPrString = '## Related Pull Requests:\n' +
+        '_Production_: ' + prLinks.production + '\n' +
+        '_Preprod_: ' + prLinks.preprod + '\n' +
+        '_Devcelop_: ' + prLinks.develop;
+
+	// Append PR links to the end of the summary.
+	const newSummary = prProps.summary + relatedPrString;
 
 	// Get array of open PR numbers.
 	const { stdout: prList } = await exec(`gh pr list -s open`);
@@ -210,7 +221,13 @@ function updatePrProps(prString) {
     prProps.ticketIdSet = [ticketId];
     prProps.title = restOfTitle.join(': ');
     // Parse the body
-    prProps.summary = prString.split('--\n')[1].split('_Develop_')[0];
+    const [ summary, prLinksString ] = prString.split('--\n')[1].split('## Related Pull Requests:\n');
+    prProps.summary = summary;
+    // Parse the PR links
+    const [ production, preprod, develop ] = prLinksString.split('\n');
+    prLinks.production = production.split(': ')[1];
+    prLinks.preprod = preprod.split(': ')[1];
+    prLinks.develop = develop.split(': ')[1];
 }
 
 /**
