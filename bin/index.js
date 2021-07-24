@@ -26,6 +26,14 @@ const prLinks = {
  * @returns bool Success or failure
  */
 async function main() {
+    // Check to be sure the GitHub CLI is installed
+    try {
+        await exec('gh --version');
+    } catch (e) {
+        console.log(chalk.red('ERROR: You do not have the gh CLI installed on your system. Please see the gitdid readme for info. https://github.com/thischrisblack/gitdid'));
+		return false;
+    }
+    
     try {
         // Get current branch
         const { stdout } = await exec('git branch --show-current');
