@@ -30,7 +30,7 @@ async function main() {
     try {
         await exec('gh --version');
     } catch (e) {
-        console.log(chalk.red('ERROR: You do not have the gh CLI installed on your system. Please see the gitdid readme for info. https://github.com/thischrisblack/gitdid'));
+        console.log(chalk.red('ERROR: You do not have the gh CLI installed on your system. Please see the readme for info. https://github.com/thischrisblack/gitdid'));
 		return false;
     }
     
@@ -42,7 +42,7 @@ async function main() {
 
         // Rough check to be sure we're on the correct branch.
 		if (workingBranch.endsWith('-develop') || workingBranch.endsWith('-preprod') || workingBranch === 'production') {
-			throw new Error('You are on the wrong branch. Please check out the feature branch you cut from production, not your -develop or -preprod feature branch.');
+			throw new Error('You are on the wrong branch. Please check out the feature branch you cut from production.');
 		}
 
         // Check for merge conflicts
